@@ -13,8 +13,12 @@
 PassThroughGate::PassThroughGate(int _inAddress, int _outputAddress, int _ID, std::shared_ptr<ParametersTable> _PT) :
 	AbstractGate(_PT) {
 	ID = _ID;
-	inputs = { _inAddress };
-	outputs = { _outputAddress };
+	//inputs = { _inAddress };
+	//outputs = { _outputAddress };
+	inputs.clear();
+	inputs.push_back(_inAddress);
+	outputs.clear();
+	outputs.push_back(_outputAddress);
 }
 
 void PassThroughGate::update(std::vector<double> & nodes, std::vector<double> & nextNodes) {  //this translates the input bits of the current states to the output bits of the next states
