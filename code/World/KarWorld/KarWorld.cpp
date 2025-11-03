@@ -1,0 +1,143 @@
+//  MABE is a product of The Hintze Lab @ MSU
+//     for general research information:
+//         hintzelab.msu.edu
+//     for MABE documentation:
+//         github.com/Hintzelab/MABE/wiki
+//
+//  Copyright (c) 2015 Michigan State University. All rights reserved.
+//     to view the full license, visit:
+//         github.com/Hintzelab/MABE/wiki/License
+
+#include "KarWorld.h"
+
+shared_ptr<ParameterLink<int>> KarWorld::evaluationsPerGenerationPL =
+    Parameters::register_parameter("WORLD_Kar-evaluationsPerGeneration", 100,
+    "How many steps to simulate per generation?");
+
+shared_ptr<ParameterLink<int>> KarWorld::mapWidthPL =
+    Parameters::register_parameter("WORLD_Kar-mapWidth", 50,
+    "Width of world map.");
+
+shared_ptr<ParameterLink<int>> KarWorld::mapHeightPL =
+    Parameters::register_parameter("WORLD_Kar-mapHeight", 50,
+    "Height of world map.");
+
+shared_ptr<ParameterLink<double>> KarWorld::resDensityPL =
+    Parameters::register_parameter("WORLD_Kar-resDensity", 0.05,
+    "Starting resource density.");
+
+shared_ptr<ParameterLink<double>> KarWorld::resGrowthRatePL =
+    Parameters::register_parameter("WORLD_Kar-resGrowthRate", 0.01,
+    "Rate of resource growth.");
+
+shared_ptr<ParameterLink<double>> KarWorld::visionRadiusPL =
+    Parameters::register_parameter("WORLD_Kar-visionRadius", 5.0,
+    "Agent's vision radius.");
+
+
+// shared_ptr<ParameterLink<int>> KarWorld::numAgentsPL = 
+//     Parameters::register_parameter("WORLD_Kar-numAgents", 2,
+//     "Number of coexisting agents.");
+
+KarWorld::KarWorld(shared_ptr<ParametersTable> PT) : AbstractWorld(PT) {
+    evaluationsPerGeneration = evaluationsPerGenerationPL->get(PT);
+
+    mapWidth = mapWidthPL->get(PT);
+    mapHeight = mapHeightPL->get(PT);
+    resDensity = resDensityPL->get(PT);
+    resGrowthRate = resGrowthRatePL->get(PT);
+    visionRadius = visionRadiusPL->get(PT);
+    // numAgents = numAgentsPL->get(PT);
+    
+    // Initialize world map with resources, no agents added yet
+    worldmap = WorldMap(mapWidth, mapHeight, resDensity, resGrowthRate);
+
+	popFileColumns.clear();
+    popFileColumns.push_back("score");
+}
+
+// For each generation, we simulate the current population's lifetime.
+// At the end of the generation, we collect fitness scores and allow MABE to update the population.
+// We then reset the world, including resource placement and agent-organism linkages.
+auto KarWorld::evaluate(map<string, shared_ptr<Group>>& groups, int analyze, int visualize, int debug) -> void {
+    std::vector<std::shared_ptr<Organism>> population = groups[groupName]->population;
+    int popSize = population.size();
+
+    assert(popSize < mapWidth * mapHeight && "Too many organisms!");
+
+    worldmap.resetMap(); // reset resource placement, clear agents
+    worldmap.addAgents(population); // reset agent positions, and form new agent-organism linkages
+
+    assert(worldmap.agents.size() == popSize && "The number of agents is not equal to the population size!");
+
+    // Reset all brains
+    for (int i = 0; i < popSize; ++i) {
+        population.at(i)->brains[brainName]->resetBrain();
+    }
+
+    // Let it rip
+    for (int t = 0; t < evaluationsPerGeneration; ++t) {
+
+        // --------------------------------------------
+        // Phase 1: sense and decide (don't move yet!!)
+        // --------------------------------------------
+
+        std::vector<int> rotationCmds(popSize, 0);
+        std::vector<int> forwardCmds (popSize, 0);
+
+        for (int i = 0; i < popSize; ++i) {
+            Agent & agent = worldmap.agents.at(i);        
+            Organism & org = *agent.org;
+            auto & brain = org.brains[brainName]; // too lazy to figure out variable type
+
+            assert(agent.org == population.at(i) && "Agent's org pointer must match the one in the population");
+
+            // Sense the world, and set brain inputs
+            auto inputs = worldmap.senseWorld(agent, visionRadius);
+            for (int j = 0; j < inputs.size(); ++j) {
+                brain->setInput(j, inputs[j]); // set input j
+            }
+
+            // Convert inputs to outputs
+            brain->update();
+            
+            // Grab brain outputs (I think these are double values in CGP?)
+            double rotateOut = brain->readOutput(0);
+            double moveOut = brain->readOutput(1);
+
+            // Convert brain outputs into actual commands (I don't know if this is going to work!)
+            int rotationCmd = Trit(rotateOut); // 1 (right), 0 (no turn), -1 (left)
+            int forwardCmd = Bit(forwardCmd); // 0 (don't move), 1 (move one step forward)
+
+            // Store the commands for now
+            rotationCmds.at(i) = rotationCmd;
+            forwardCmds.at(i) = forwardCmd;
+        }
+
+        // --------------------------------------------
+        // Phase 2: move
+        // --------------------------------------------
+
+        for (int i = 0; i < popSize; ++i) {
+            worldmap.stepAgent(worldmap.agents.at(i), rotationCmds.at(i), forwardCmds.at(i));
+        }
+
+        // Random resource regrowth
+        worldmap.growResource();
+    } 
+
+    for (int i = 0; i < popSize; ++i) {
+        population.at(i)->dataMap.set("score", worldmap.agents.at(i).fitness);
+    }
+
+}
+
+// The requiredGroups function lets MABE know how to set up populations of organisms that this world needs
+// 6 inputs for vision, 2 outputs for rotation and forward commands
+auto KarWorld::requiredGroups() -> unordered_map<string,unordered_set<string>> {
+	return { { groupName, { "B:" + brainName + ",6,2" } } }; 
+}
+
+
+
+

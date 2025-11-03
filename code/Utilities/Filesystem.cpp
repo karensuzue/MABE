@@ -4,6 +4,7 @@
 #include <vector>
 #include <regex>
 #include <string>
+#include <cstring>
 
 // given a path or filename, return T or F if it exists already
 bool fileExists(const std::string& filename) {
