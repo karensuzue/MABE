@@ -103,11 +103,11 @@ auto KarWorld::evaluate(map<string, shared_ptr<Group>>& groups, int analyze, int
             
             // Grab brain outputs (I think these are double values in CGP?)
             double rotateOut = brain->readOutput(0);
-            double moveOut = brain->readOutput(1);
+            double forwardOut = brain->readOutput(1);
 
             // Convert brain outputs into actual commands (I don't know if this is going to work!)
             int rotationCmd = Trit(rotateOut); // 1 (right), 0 (no turn), -1 (left)
-            int forwardCmd = Bit(forwardCmd); // 0 (don't move), 1 (move one step forward)
+            int forwardCmd = Bit(forwardOut); // 0 (don't move), 1 (move one step forward)
 
             // Store the commands for now
             rotationCmds.at(i) = rotationCmd;
