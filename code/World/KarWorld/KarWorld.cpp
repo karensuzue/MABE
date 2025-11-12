@@ -34,6 +34,9 @@ shared_ptr<ParameterLink<double>> KarWorld::visionRadiusPL =
     Parameters::register_parameter("WORLD_Kar-visionRadius", 5.0,
     "Agent's vision radius.");
 
+shared_ptr<ParameterLink<string>> KarWorld::visionModePL =
+    Parameters::register_parameter("WORLD_Kar-visionMode", string("Nearest"), 
+    "Agent's vision mode, [Nearest, Average]"); // [Nearest, Average]
 
 // shared_ptr<ParameterLink<int>> KarWorld::numAgentsPL = 
 //     Parameters::register_parameter("WORLD_Kar-numAgents", 2,
@@ -47,10 +50,11 @@ KarWorld::KarWorld(shared_ptr<ParametersTable> PT) : AbstractWorld(PT) {
     resDensity = resDensityPL->get(PT);
     resGrowthRate = resGrowthRatePL->get(PT);
     visionRadius = visionRadiusPL->get(PT);
+    visionMode = visionModePL->get(PT);
     // numAgents = numAgentsPL->get(PT);
     
     // Initialize world map with resources, no agents added yet
-    worldmap = WorldMap(mapWidth, mapHeight, resDensity, resGrowthRate);
+    worldMap = WorldMap(mapWidth, mapHeight, resDensity, resGrowthRate, visionMode);
 
 	popFileColumns.clear();
     popFileColumns.push_back("score");
@@ -65,14 +69,10 @@ auto KarWorld::evaluate(map<string, shared_ptr<Group>>& groups, int analyze, int
 
     assert(popSize < mapWidth * mapHeight && "Too many organisms!");
 
-    worldmap.resetMap(); // reset resource placement, clear agents
-    worldmap.addAgents(population); // reset agent positions, and form new agent-organism linkages
+    worldMap.resetMap(); // reset resource placement, clear agents
+    worldMap.addAgents(population); // reset agent positions, and form new agent-organism linkages
 
-    assert(worldmap.agents.size() == popSize && "The number of agents is not equal to the population size!");
-
-    if (visualize) {
-        // write a visualize function to output current state (grid + resource + agent locations)
-    }
+    assert(worldMap.agents.size() == popSize && "The number of agents is not equal to the population size!");
 
     // Reset all brains
     for (int i = 0; i < popSize; ++i) {
@@ -81,6 +81,9 @@ auto KarWorld::evaluate(map<string, shared_ptr<Group>>& groups, int analyze, int
 
     // Let it rip
     for (int t = 0; t < evaluationsPerGeneration; ++t) {
+        if (visualize /*&& t % 1000*/) {
+            std::cout << worldMap;
+        }
 
         // --------------------------------------------
         // Phase 1: sense and decide (don't move yet!!)
@@ -90,14 +93,14 @@ auto KarWorld::evaluate(map<string, shared_ptr<Group>>& groups, int analyze, int
         std::vector<int> forwardCmds (popSize, 0);
 
         for (int i = 0; i < popSize; ++i) {
-            Agent & agent = worldmap.agents.at(i);        
+            Agent & agent = worldMap.agents.at(i);        
             Organism & org = *agent.org;
             auto & brain = org.brains[brainName]; // too lazy to figure out variable type
 
             assert(agent.org == population.at(i) && "Agent's org pointer must match the one in the population");
 
             // Sense the world, and set brain inputs
-            auto inputs = worldmap.senseWorld(agent, visionRadius);
+            auto inputs = worldMap.senseWorld(agent, visionRadius);
             for (int j = 0; j < inputs.size(); ++j) {
                 brain->setInput(j, inputs[j]); // set input j
             }
@@ -110,7 +113,7 @@ auto KarWorld::evaluate(map<string, shared_ptr<Group>>& groups, int analyze, int
             double forwardOut = brain->readOutput(1);
 
             // Convert brain outputs into actual commands (I don't know if this is going to work!)
-            int rotationCmd = Trit(rotateOut); // 1 (right), 0 (no turn), -1 (left)
+            int rotationCmd = Trit(rotateOut); // -1 (left), 0 (no turn), 1 (right)
             int forwardCmd = Bit(forwardOut); // 0 (don't move), 1 (move one step forward)
 
             // Store the commands for now
@@ -123,15 +126,15 @@ auto KarWorld::evaluate(map<string, shared_ptr<Group>>& groups, int analyze, int
         // --------------------------------------------
 
         for (int i = 0; i < popSize; ++i) {
-            worldmap.stepAgent(worldmap.agents.at(i), rotationCmds.at(i), forwardCmds.at(i));
+            worldMap.stepAgent(worldMap.agents.at(i), rotationCmds.at(i), forwardCmds.at(i));
         }
 
         // Random resource regrowth
-        worldmap.growResource();
+        worldMap.growResource();
     } 
 
     for (int i = 0; i < popSize; ++i) {
-        population.at(i)->dataMap.set("score", worldmap.agents.at(i).fitness);
+        population.at(i)->dataMap.set("score", worldMap.agents.at(i).fitness);
     }
 
 }

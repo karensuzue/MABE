@@ -36,6 +36,7 @@ public:
     static shared_ptr<ParameterLink<double>> resDensityPL;
     static shared_ptr<ParameterLink<double>> resGrowthRatePL;
     static shared_ptr<ParameterLink<double>> visionRadiusPL;
+    static shared_ptr<ParameterLink<string>> visionModePL;
     
     // static shared_ptr<ParameterLink<int>> numAgentsPL;
     
@@ -44,12 +45,13 @@ public:
     double resDensity;
     double resGrowthRate;
     double visionRadius;
+    string visionMode;
     // int numAgents;
 
-    WorldMap worldmap;
+    WorldMap worldMap;
     
-    std::string groupName = "root::";
-    std::string brainName = "root::";
+    string groupName = "root::";
+    string brainName = "root::";
     
     KarWorld(shared_ptr<ParametersTable> PT);
     virtual ~KarWorld() = default;

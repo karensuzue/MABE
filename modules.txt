@@ -2,9 +2,10 @@
   - Logic16
   - NBack
   - BlockCatch
-  + Test
+  - Test
   - PathFollow
   - TPM_GENERATOR
+  + Kar
   - Berry
 
 % Genome
