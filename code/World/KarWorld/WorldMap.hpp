@@ -26,11 +26,20 @@
 class Agent {
 public:
     std::shared_ptr<Organism> org; // pointer to the actual evolving Organism (contains genome, brain)
-    int row, col; // position
-    int fitness = 0; // accumulated resources
+    int row, col;
 
+    // SIZE RULE NOTES:
+    // Fitness is accumulated resources, but currently doubles as
+    // "stored calories" in a prey that gets copied to the predator that consumed it
+    // Once dead, an agent can't increase their fitness, but still retains what they've consumed while alive
+    int fitness = 0; 
+    int size = 0; // for size rule
+    bool alive = true; // book keeping
+    // int energy = 100; // TODO: some kind of energy cool down
+    
     // 0 is North, 1 is East, 2 is South, 3 is West
     int facingDir = 0;
+
 
     // TODO: randomize facingDir? 
     Agent(std::shared_ptr<Organism> o , int r = 0, int c = 0, int facing = 0) 
@@ -82,13 +91,21 @@ public:
 
     VisionMode visionMode; // [Nearest, Average]
 
+    bool allowSizeRule;
+    bool allowAgeRule;
+    int eatingCost;
+
+
     WorldMap() : width(0), height(0), resDensity(0.0), /*resGrowthRate(0.0),*/ 
         visionMode(VisionMode::NEAREST) {}
 
-    WorldMap(int w, int h, double density, int minCool, int maxCool, std::string vismode) 
+    WorldMap(int w, int h, double density, int minCool, int maxCool, 
+            std::string vismode, bool size, bool age/*, int eatCost*/) 
         : width(w), height(h), 
         resDensity(density), /*resGrowthRate(grow),*/
         minResCooldown(minCool), maxResCooldown(maxCool),
+        allowSizeRule(size), allowAgeRule(age),
+        // eatingCost(eatCost),
         grid(w * h)
     {   
         assert(w > 0 && h > 0 && "Grid dimensions cannot be 0!");
@@ -107,6 +124,7 @@ public:
         return grid.at(r * width + c);
     } 
 
+    // Rain in resources at random locations
     void initResourcesByShuffle() {
         const int N = width * height;
 
@@ -135,6 +153,7 @@ public:
         }
     }
 
+    // TODO: combine init resources and init agents, make sure agents dont spawn in where theres food
     // Add agents randomly and link them to existing Organisms
     void initAgentsByShuffle(std::vector<std::shared_ptr<Organism>> population) {
         const int N = width * height;
@@ -171,6 +190,8 @@ public:
         }
     }
 
+    // TODO: better visualizer in python, play frames from .txt file, wait between frames
+    // even better: arrow key to swithc between frames
     void display(std::ostream & os) const {
         /*
         Sample grid:
@@ -201,7 +222,7 @@ public:
             for (int c = 0; c < width; ++c) {
                 const Cell & cell = (*this).at(r, c);
 
-                char symbol = '.'; // default
+                char symbol = ' '; // default
 
                 if (cell.occupant != nullptr) {
                     const Agent & agent = *((*this).at(r, c).occupant);
@@ -248,10 +269,19 @@ public:
         return candidateIdxs[chosen];
     }
 
+    // TODO: when food consumed, put a new one on the board, but dont spawn in loc occupied by agent
     // Resources must wait for cooldown and can't rain in locations occupied by agents
     // Resources also has a pSameCell chance of respawning in the same location
     void updateResourcesPerStep(double pSameCell) {
         const int N = width * height;
+
+        // If the world is saturated with resources, return
+        double currentDensity = static_cast<double>(totalResCount) / 
+                                static_cast<double>(width * height);
+        if (currentDensity >= resDensity) {
+            return; 
+        }
+
         for (int i = 0; i < N; ++i) {
             Cell & cell = grid.at(i);
 
@@ -416,5 +446,8 @@ public:
         resourceSignal.insert(resourceSignal.end(), agentSignal.begin(), agentSignal.end());
         return resourceSignal;  // [R_left, R_center, R_right, A_left, A_center, A_right]
     }
+
+
+
 };
 

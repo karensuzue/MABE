@@ -54,13 +54,18 @@ shared_ptr<ParameterLink<string>> KarWorld::visionModePL =
     Parameters::register_parameter("WORLD_Kar-visionMode", string("Nearest"), 
     "Agent's vision mode, [Nearest, Average]");
 
-shared_ptr<ParameterLink<bool>> KarWorld::sizeRulePL =
-    Parameters::register_parameter("WORLD_Kar-sizeRule", false, 
-    "Toggle size rule, [true, false]");
+shared_ptr<ParameterLink<bool>> KarWorld::allowSizeRulePL =
+    Parameters::register_parameter("WORLD_Kar-allowSizeRule", false, 
+    "Toggle size-based predation rule, [true, false]");
 
-shared_ptr<ParameterLink<bool>> KarWorld::ageRulePL =
-    Parameters::register_parameter("WORLD_Kar-ageRule", false, 
-    "Toggle age rule, [true, false]");
+shared_ptr<ParameterLink<bool>> KarWorld::allowAgeRulePL =
+    Parameters::register_parameter("WORLD_Kar-allowAgeRule", false, 
+    "Toggle age-based predation rule, [true, false]");
+
+// shared_ptr<ParameterLink<int>> KarWorld::eatingCostPL =
+//     Parameters::register_parameter("WORLD_Kar-eatingCost", 1,
+//     "Fitness cost of consuming another agent. Only applies when one of the predation rules is enabled");
+
 
 // shared_ptr<ParameterLink<int>> KarWorld::numAgentsPL = 
 //     Parameters::register_parameter("WORLD_Kar-numAgents", 2,
@@ -82,26 +87,25 @@ KarWorld::KarWorld(shared_ptr<ParametersTable> PT) : AbstractWorld(PT) {
     visionRadius = visionRadiusPL->get(PT);
     visionMode = visionModePL->get(PT);
 
-    sizeRule = sizeRulePL->get(PT);
-    ageRule = ageRulePL->get(PT);
+    allowSizeRule = allowSizeRulePL->get(PT);
+    allowAgeRule = allowAgeRulePL->get(PT);
     // numAgents = numAgentsPL->get(PT);
     
     // Initialize world map with resources, no agents added yet
-    worldMap = WorldMap(mapWidth, mapHeight, resDensity, minResCooldown, maxResCooldown, visionMode);
+    worldMap = WorldMap(mapWidth, mapHeight, resDensity, minResCooldown, maxResCooldown, 
+                        visionMode, allowSizeRule, allowAgeRule);
 
 	popFileColumns.clear();
     popFileColumns.push_back("score");
-
-    // frames.open("frames.txt", std::ios::app);
-    // if (!frames.is_open()) {
-    //     std::cout << "Could not open frames.txt!" << std::endl;
-    // }
 }
 
 // For each generation, we run several simulations of the current population's lifetime.
 // At the end of the generation, we collect average fitness scores and allow MABE to update the population.
 // We then reset the world, including resource placement and agent-organism linkages.
 auto KarWorld::evaluate(map<string, shared_ptr<Group>>& groups, int analyze, int visualize, int debug) -> void {
+    std::cout << "Global::update = " << Global::update << "\n";
+    std::cout << "visualize = " << visualize << " analyze = " << analyze << "\n";
+
     std::vector<std::shared_ptr<Organism>> population = groups[groupName]->population;
     const int popSize = static_cast<int>(population.size());
 
@@ -125,7 +129,7 @@ auto KarWorld::evaluate(map<string, shared_ptr<Group>>& groups, int analyze, int
         // Display the initial world once at the beginning of a lifetime
         if (visualize) {
             // std::cout << worldMap;
-            visualizeData = "** Simulation " + std::to_string(t) + "**\n"; 
+            // visualizeData = "** Simulation " + std::to_string(t) + "**\n"; 
             visualizeData += "**Initialize World**\n";
             ss << worldMap;
             visualizeData += ss.str();
@@ -152,10 +156,10 @@ auto KarWorld::evaluate(map<string, shared_ptr<Group>>& groups, int analyze, int
 
             for (int i = 0; i < popSize; ++i) {
                 Agent & agent = worldMap.agents.at(i);        
-                Organism & org = *agent.org;
+                Organism & org = *(agent.org);
                 auto & brain = org.brains[brainName]; // too lazy to figure out variable type
 
-                assert(agent.org == population.at(i) && "Agent's org pointer must match the one in the population");
+                assert(agent.org == population.at(i) && "Agent's org pointer must match the one in the population!");
 
                 // COMMENT OUT IF HUMAN 
                 // Write per-agent information to file

@@ -48,8 +48,9 @@ public:
     static shared_ptr<ParameterLink<double>> visionRadiusPL;
     static shared_ptr<ParameterLink<string>> visionModePL;
 
-    static shared_ptr<ParameterLink<bool>> sizeRulePL;
-    static shared_ptr<ParameterLink<bool>> ageRulePL;
+    static shared_ptr<ParameterLink<bool>> allowSizeRulePL;
+    static shared_ptr<ParameterLink<bool>> allowAgeRulePL;
+    static shared_ptr<ParameterLink<int>> eatingCostPL;
     
     // static shared_ptr<ParameterLink<int>> numAgentsPL;
     
@@ -68,8 +69,9 @@ public:
     string visionMode;
     // int numAgents;
 
-    bool sizeRule;
-    bool ageRule;
+    bool allowSizeRule;
+    bool allowAgeRule;
+    int eatingCost;
 
     WorldMap worldMap;
     
