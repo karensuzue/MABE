@@ -19,7 +19,8 @@ from typing import List
 def split_frames(text: str, expected_rows) -> List[List[str]]:
     """
     Splits text into a list of frames :)
-    Does row count checking. Too lazy to implement column count checking.
+    Does row count checking. 
+    Too lazy to implement column count checking (it's probably not needed). 
 
     Expected frame format:
     **Some Header**
@@ -96,9 +97,9 @@ def player(stdscr, frames: List[List[str]], fps: float) -> None:
 
     idx = 0
     paused = False
+    last_tick = time.time()
     while True:
-        now = time.time()
-
+        now = time.time() # current time in seconds
         # --- INPUT ---
         ch = stdscr.getch() # this returns ASCII number
         if ch != -1: 
@@ -110,6 +111,27 @@ def player(stdscr, frames: List[List[str]], fps: float) -> None:
                 idx = (idx + 1) % len(frames)
             elif ch == curses.KEY_LEFT: # move backward
                 idx = (idx - 1 + len(frames)) % len(frames)
+            elif ch in (ord("r"), ord('R')):
+                idx = 0
+        
+        # --- ADVANCE TO NEXT FRAME ---
+        # if paused, and enough time has passed since the last frame
+        if not paused and (now - last_tick) >= delay:
+            idx = (idx + 1) % len(frames)
+            last_tick = now
+        
+        # --- RENDER ---
+        stdscr.erase() 
+        h, w = stdscr.getmaxyx() # terminal size
+
+        frame_lines = frames[idx] # grab lines from current frame
+        # Draw as many frame lines as fit on screen
+        for row_i in range(min(h, len(frame_lines))):
+            line = frame_lines[row_i]
+            stdscr.addnstr(row_i, 0, line, w - 1)
+
+        stdscr.refresh()
+        time.sleep(0.005)
 
 def main():
     ap = argparse.ArgumentParser(description="Play ASCII world frames from a text file with keyboard controls.")
@@ -121,8 +143,7 @@ def main():
 
     text = args.path.read_text()
     frames = split_frames(text, args.row_count) # list of frames
-    print(frames)
-
+    
     if not frames:
         print("No frames found!")
 
@@ -134,6 +155,8 @@ def main():
     curses.cbreak() 
     #turn off blink cursors
     curses.curs_set(False)
+    # getch pauses program until it gets a key, nodelay turns that off for animation to work
+    stdscr.nodelay(True)
     # Enable the keypad
     stdscr.keypad(True)
 
