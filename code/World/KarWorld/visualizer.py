@@ -128,6 +128,7 @@ def player(stdscr, frames: List[List[str]], fps: float) -> None:
         # Draw as many frame lines as fit on screen
         for row_i in range(min(h, len(frame_lines))):
             line = frame_lines[row_i]
+            # draws at most w-1 characters from line at row "row_i", column 0
             stdscr.addnstr(row_i, 0, line, w - 1)
 
         stdscr.refresh()

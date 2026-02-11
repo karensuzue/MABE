@@ -40,6 +40,8 @@ public:
     static shared_ptr<ParameterLink<int>> mapHeightPL;
 
     static shared_ptr<ParameterLink<double>> resDensityPL;
+    static shared_ptr<ParameterLink<int>> gapWidthPL; 
+
     // static shared_ptr<ParameterLink<double>> resGrowthRatePL;
     static shared_ptr<ParameterLink<int>> minResCooldownPL;
     static shared_ptr<ParameterLink<int>> maxResCooldownPL;
@@ -60,6 +62,8 @@ public:
     int mapWidth, mapHeight;
 
     double resDensity;
+    int gapWidth;
+
     // double resGrowthRate;
     int minResCooldown;
     int maxResCooldown;

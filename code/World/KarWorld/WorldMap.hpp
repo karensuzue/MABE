@@ -153,7 +153,68 @@ public:
         }
     }
 
-    // TODO: combine init resources and init agents, make sure agents dont spawn in where theres food
+    // Resources initialize in the left side of the map
+    void initResourcesLeft(int gapW) {
+        assert(gapW < width && "Gap width must be less than map width!");
+        const int N = width * height;
+
+        // Reset
+        totalResCount = 0;
+        for (int i = 0; i < N; ++i) {
+            grid.at(i).resource = false;
+            grid.at(i).cooldown = Random::getInt(minResCooldown, maxResCooldown);
+        }
+
+        const int zoneW = (width - gapW) / 2; // width of resource zone
+        for (int i = 0; i < N; ++i) {
+            int col = i % width;
+            if (col >= 0 && col < zoneW) {
+                if (Random::P(resDensity)) {
+                    Cell & cell = grid.at(i);
+                    cell.resource = true;
+                    ++totalResCount;
+                    cell.cooldown = 0;
+                }
+            }
+        }
+    }
+
+    // Agents initialize in the right side of the map
+    void initAgentsRight(int gapW, std::vector<std::shared_ptr<Organism>> population) {
+        assert(gapW < width && "Gap width must be less than map width!");
+        const int N = width * height;
+        const int zoneW = (width - gapW) / 2; // width of agents zone
+        const int popSize = static_cast<int>(population.size());
+        assert(popSize <= zoneW * height && "There are too many organisms and too few cells!");
+
+        // Reset
+        agents.clear();
+        for (int i = 0; i < N; ++i) {
+            grid.at(i).occupant = nullptr;
+        }
+
+        // Find indices that sit in the right side of the map
+        std::vector<int> grid_idxs;
+        grid_idxs.reserve(zoneW * height);
+        for (int i = 0; i < N; ++i) {
+            int col = i % width;
+            if (col >= zoneW + gapW && col < width) { 
+                grid_idxs.push_back(i);
+            }
+        }
+        std::shuffle(grid_idxs.begin(), grid_idxs.end(), Random::getCommonGenerator());
+
+        // Assign first popSize grid_idxs to agents
+        for (int i = 0; i < popSize; ++i) {
+            int idx = grid_idxs.at(i);
+            int r = idx / width;
+            int c = idx % width;
+
+            agents.emplace_back(population.at(i), r, c);
+            grid.at(idx).occupant = &agents.back();
+        }
+    }
+
     // Add agents randomly and link them to existing Organisms
     void initAgentsByShuffle(std::vector<std::shared_ptr<Organism>> population) {
         const int N = width * height;
@@ -269,7 +330,6 @@ public:
         return candidateIdxs[chosen];
     }
 
-    // TODO: when food consumed, put a new one on the board, but dont spawn in loc occupied by agent
     // Resources must wait for cooldown and can't rain in locations occupied by agents
     // Resources also has a pSameCell chance of respawning in the same location
     void updateResourcesPerStep(double pSameCell) {
@@ -312,6 +372,10 @@ public:
                 }
             }
         }
+    }
+
+    void updateResourcesPerStep2() {
+
     }
 
     // TODO: Rotation and forward commands are continuous values output from Organism brains?

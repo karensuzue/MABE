@@ -30,6 +30,10 @@ shared_ptr<ParameterLink<double>> KarWorld::resDensityPL =
     Parameters::register_parameter("WORLD_Kar-resDensity", 0.05,
     "Starting resource density.");
 
+shared_ptr<ParameterLink<int>> KarWorld::gapWidthPL =
+    Parameters::register_parameter("WORLD_Kar-gapWidth", 1,
+    "Number of columns between resource and agent zones at initialization.");
+
 // shared_ptr<ParameterLink<double>> KarWorld::resGrowthRatePL =
 //     Parameters::register_parameter("WORLD_Kar-resGrowthRate", 0.01,
 //     "Rate of resource growth.");
@@ -78,6 +82,7 @@ KarWorld::KarWorld(shared_ptr<ParametersTable> PT) : AbstractWorld(PT) {
     mapWidth = mapWidthPL->get(PT);
     mapHeight = mapHeightPL->get(PT);
     resDensity = resDensityPL->get(PT);
+    gapWidth = gapWidthPL->get(PT);
     // resGrowthRate = resGrowthRatePL->get(PT);
 
     minResCooldown = minResCooldownPL->get(PT);
@@ -103,8 +108,8 @@ KarWorld::KarWorld(shared_ptr<ParametersTable> PT) : AbstractWorld(PT) {
 // At the end of the generation, we collect average fitness scores and allow MABE to update the population.
 // We then reset the world, including resource placement and agent-organism linkages.
 auto KarWorld::evaluate(map<string, shared_ptr<Group>>& groups, int analyze, int visualize, int debug) -> void {
-    std::cout << "Global::update = " << Global::update << "\n";
-    std::cout << "visualize = " << visualize << " analyze = " << analyze << "\n";
+    // std::cout << "Global::update = " << Global::update << "\n";
+    // std::cout << "visualize = " << visualize << " analyze = " << analyze << "\n";
 
     std::vector<std::shared_ptr<Organism>> population = groups[groupName]->population;
     const int popSize = static_cast<int>(population.size());
@@ -115,8 +120,10 @@ auto KarWorld::evaluate(map<string, shared_ptr<Group>>& groups, int analyze, int
     // Simulate several 'lifetimes' to correct for chance
     for (int t = 0; t < evaluationsPerGeneration; ++t) { 
         // Reset and initialize map with resources and agent-organism linkages
-        worldMap.initResourcesByShuffle();
-        worldMap.initAgentsByShuffle(population);
+        // worldMap.initResourcesByShuffle();
+        // worldMap.initAgentsByShuffle(population);
+        worldMap.initResourcesLeft(gapWidth);
+        worldMap.initAgentsRight(gapWidth, population); 
 
         // Make sure all organisms are linked with an agent
         assert(worldMap.agents.size() == popSize && "The number of agents is not equal to the population size!");
