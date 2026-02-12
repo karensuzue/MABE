@@ -56,8 +56,9 @@ public:
 // ---------------------------------------------------
 struct Cell {
     bool resource = false;   // true if this cell currently has food
-    Agent* occupant = nullptr; // nullptr if empty, only 1 occupant per cell
-    int cooldown = 0; // number of steps until resources can regrow at this cell
+    // Agent* occupant = nullptr; // nullptr if empty, only 1 occupant per cell
+    int occupant_id = -1;// -1 means empty, otherwise index into agents
+    // int cooldown = 0; // number of steps until resources can regrow at this cell
 };
 
 // ---------------------------------------------------
@@ -117,80 +118,134 @@ public:
     }
 
     // Easy access for flat world representation
-    Cell & at(int r, int c) {
-        return grid.at(r * width + c);
-    }
-    const Cell & at(int r, int c) const {
-        return grid.at(r * width + c);
-    } 
+    Cell & at(int r, int c) { return grid.at(r * width + c); }
+    const Cell & at(int r, int c) const { return grid.at(r * width + c); } 
+
+    bool isOccupied(const Cell & c) const { return c.occupant_id != -1; }
 
     // Rain in resources at random locations
-    void initResourcesByShuffle() {
+    // void initResourcesByShuffle() {
+    //     const int N = width * height;
+
+    //     // Clamp in case std::lround exceeds N.... I don't know
+    //     // std::clamp expects int instead of long int, which is what std::lround returns
+    //     const int expectedResCount = std::clamp(static_cast<int>(std::lround(resDensity * N)), 0, N);
+
+    //     // Reset
+    //     totalResCount = 0;
+    //     for (int i = 0; i < N; ++i) {
+    //         grid.at(i).resource = false;
+    //         grid.at(i).cooldown = Random::getInt(minResCooldown, maxResCooldown);
+    //     }
+
+    //     // Shuffle indices
+    //     std::vector<int> idxs(N);
+    //     std::iota(idxs.begin(), idxs.end(), 0);
+    //     std::shuffle(idxs.begin(), idxs.end(), Random::getCommonGenerator());
+
+    //     // Set first K cells to have resources
+    //     for (int j = 0; j < expectedResCount; ++j) {
+    //         Cell & cell = grid.at(idxs.at(j));
+    //         cell.resource = true;
+    //         ++totalResCount;
+    //         cell.cooldown = 0; 
+    //     }
+    // }
+
+    // Add agents randomly and link them to existing Organisms
+    // void initAgentsByShuffle(const std::vector<std::shared_ptr<Organism>> & population) {
+    //     const int N = width * height;
+    //     const int popSize = static_cast<int>(population.size());
+    //     assert(popSize <= N && "There are too many organisms and too few cells!");
+        
+    //     // Reset
+    //     agents.clear();
+    //     for (int i = 0; i < N; ++i) {
+    //         grid.at(i).occupant = nullptr;
+    //     }
+
+    //     // Shuffle grid indices
+    //     std::vector<int> idxs(N);
+    //     std::iota(idxs.begin(), idxs.end(), 0);
+    //     std::shuffle(idxs.begin(), idxs.end(), Random::getCommonGenerator());
+
+    //     // Assign first popSize indices to agents
+    //     for (int i = 0; i < popSize; ++i) {
+    //         int idx = idxs.at(i);
+    //         int r = idx / width;
+    //         int c = idx % width;
+
+    //         agents.emplace_back(population.at(i), r, c);
+    //         grid.at(idx).occupant = &agents.back();
+
+    //         // If spawned in cell has resource (lucky you!!)
+    //         if (grid.at(idx).resource) {
+    //             grid.at(idx).resource = false; // consumed
+    //             --totalResCount; 
+    //             grid.at(idx).cooldown = Random::getInt(minResCooldown, maxResCooldown);
+    //             agents.back().fitness += 1; // TODO: we can vary this later
+    //         }
+    //     }
+    // }
+
+    // Resources initialize in the left side of the map
+    // Cooldown is turned off here
+    void initResourcesLeft(int gapW) {
+        assert(gapW <= width - 2 && "Gap too large, need at least 1 column per side.");
+
+        const int zoneW = (width - gapW) / 2; // width of resource zone
+        assert(zoneW > 0 && "Resource zone width is 0.");
+
         const int N = width * height;
 
         // Clamp in case std::lround exceeds N.... I don't know
         // std::clamp expects int instead of long int, which is what std::lround returns
-        const int K = std::clamp(static_cast<int>(std::lround(resDensity * N)), 0, N);
+        const int expectedResCount = std::clamp(static_cast<int>(std::lround(resDensity * N)), 0, N);
+        assert(expectedResCount <= zoneW * height && "There are too many resources and too few cells at initialization!");
 
         // Reset
         totalResCount = 0;
         for (int i = 0; i < N; ++i) {
             grid.at(i).resource = false;
-            grid.at(i).cooldown = Random::getInt(minResCooldown, maxResCooldown);
+            // grid.at(i).cooldown = Random::getInt(minResCooldown, maxResCooldown);
         }
 
-        // Shuffle indices
-        std::vector<int> idxs(N);
-        std::iota(idxs.begin(), idxs.end(), 0);
-        std::shuffle(idxs.begin(), idxs.end(), Random::getCommonGenerator());
-
-        // Set first K cells to have resources
-        for (int j = 0; j < K; ++j) {
-            Cell & cell = grid.at(idxs.at(j));
-            cell.resource = true;
-            ++totalResCount;
-            cell.cooldown = 0; 
-        }
-    }
-
-    // Resources initialize in the left side of the map
-    void initResourcesLeft(int gapW) {
-        assert(gapW < width && "Gap width must be less than map width!");
-        const int N = width * height;
-
-        // Reset
-        totalResCount = 0;
-        for (int i = 0; i < N; ++i) {
-            grid.at(i).resource = false;
-            grid.at(i).cooldown = Random::getInt(minResCooldown, maxResCooldown);
-        }
-
-        const int zoneW = (width - gapW) / 2; // width of resource zone
+        // Find indices that sit in the left side of the map
+        std::vector<int> grid_idxs;
+        grid_idxs.reserve(zoneW * height);
         for (int i = 0; i < N; ++i) {
             int col = i % width;
-            if (col >= 0 && col < zoneW) {
-                if (Random::P(resDensity)) {
-                    Cell & cell = grid.at(i);
-                    cell.resource = true;
-                    ++totalResCount;
-                    cell.cooldown = 0;
-                }
-            }
+            if (col < zoneW) grid_idxs.push_back(i);
+        }
+        std::shuffle(grid_idxs.begin(), grid_idxs.end(), Random::getCommonGenerator());
+
+        // Assign resources to the first 'expectedResCount' cells
+        for (int i = 0; i < expectedResCount; ++i) {
+            int idx = grid_idxs.at(i);
+            Cell & cell = grid.at(idx);
+            cell.resource = true;
+            ++totalResCount;
         }
     }
 
     // Agents initialize in the right side of the map
-    void initAgentsRight(int gapW, std::vector<std::shared_ptr<Organism>> population) {
-        assert(gapW < width && "Gap width must be less than map width!");
-        const int N = width * height;
+    // Cooldown is turned off here
+    void initAgentsRight(int gapW, const std::vector<std::shared_ptr<Organism>> & population) {
+        assert(gapW <= width - 2 && "Gap too large, need at least 1 column per side.");
+
         const int zoneW = (width - gapW) / 2; // width of agents zone
+        assert(zoneW > 0 && "Agent zone width is 0.");
+
         const int popSize = static_cast<int>(population.size());
-        assert(popSize <= zoneW * height && "There are too many organisms and too few cells!");
+        assert(popSize <= zoneW * height && "There are too many organisms and too few cells at initialization!");
+
+        const int N = width * height;
 
         // Reset
         agents.clear();
+        agents.reserve(popSize);  
         for (int i = 0; i < N; ++i) {
-            grid.at(i).occupant = nullptr;
+            grid.at(i).occupant_id = -1; // -1 signals empty cell
         }
 
         // Find indices that sit in the right side of the map
@@ -198,7 +253,7 @@ public:
         grid_idxs.reserve(zoneW * height);
         for (int i = 0; i < N; ++i) {
             int col = i % width;
-            if (col >= zoneW + gapW && col < width) { 
+            if (col >= zoneW + gapW) { 
                 grid_idxs.push_back(i);
             }
         }
@@ -211,43 +266,7 @@ public:
             int c = idx % width;
 
             agents.emplace_back(population.at(i), r, c);
-            grid.at(idx).occupant = &agents.back();
-        }
-    }
-
-    // Add agents randomly and link them to existing Organisms
-    void initAgentsByShuffle(std::vector<std::shared_ptr<Organism>> population) {
-        const int N = width * height;
-        const int popSize = static_cast<int>(population.size());
-        assert(popSize <= N && "There are too many organisms and too few cells!");
-        
-        // Reset
-        agents.clear();
-        for (int i = 0; i < N; ++i) {
-            grid.at(i).occupant = nullptr;
-        }
-
-        // Shuffle grid indices
-        std::vector<int> idxs(N);
-        std::iota(idxs.begin(), idxs.end(), 0);
-        std::shuffle(idxs.begin(), idxs.end(), Random::getCommonGenerator());
-
-        // Assign first popSize indices to agents
-        for (int i = 0; i < popSize; ++i) {
-            int idx = idxs.at(i);
-            int r = idx / width;
-            int c = idx % width;
-
-            agents.emplace_back(population.at(i), r, c);
-            grid.at(idx).occupant = &agents.back();
-
-            // If spawned in cell has resource (lucky you!!)
-            if (grid.at(idx).resource) {
-                grid.at(idx).resource = false; // consumed
-                --totalResCount; 
-                grid.at(idx).cooldown = Random::getInt(minResCooldown, maxResCooldown);
-                agents.back().fitness += 1; // TODO: we can vary this later
-            }
+            grid.at(idx).occupant_id = i;
         }
     }
 
@@ -285,8 +304,8 @@ public:
 
                 char symbol = ' '; // default
 
-                if (cell.occupant != nullptr) {
-                    const Agent & agent = *((*this).at(r, c).occupant);
+                if (isOccupied(cell)) {
+                    const Agent & agent = agents.at(cell.occupant_id);
                     if (agent.facingDir == 0) symbol = '^'; // North
                     else if (agent.facingDir == 1) symbol = '>'; // East
                     else if (agent.facingDir == 2) symbol = 'v'; // South
@@ -309,7 +328,7 @@ public:
     }
 
     // Helper function for updateResourcesPerStep
-    // Picks a random cell INDEX to place rain in the resource map
+    // Picks a random cell INDEX to respawn resources in the map
     int pickRandomResourceCell() {
         std::vector<int> candidateIdxs;
         candidateIdxs.reserve(width * height); // increase capacity
@@ -317,11 +336,10 @@ public:
         // Record unoccupied cells without resources
         for (int i = 0; i < width * height; ++i) {
             const Cell & cell = grid.at(i);
-            if (!cell.resource && cell.occupant == nullptr) { 
+            if (!cell.resource && !isOccupied(cell)) { 
                 candidateIdxs.push_back(i);
             }
         }
-
         if (candidateIdxs.empty()) {
             return -1;  // signal failure 
         }
@@ -332,57 +350,123 @@ public:
 
     // Resources must wait for cooldown and can't rain in locations occupied by agents
     // Resources also has a pSameCell chance of respawning in the same location
-    void updateResourcesPerStep(double pSameCell) {
-        const int N = width * height;
+    // void updateResourcesPerStep(double pSameCell) {
+    //     const int N = width * height;
 
-        // If the world is saturated with resources, return
-        double currentDensity = static_cast<double>(totalResCount) / 
-                                static_cast<double>(width * height);
-        if (currentDensity >= resDensity) {
-            return; 
-        }
+    //     // If the world is saturated with resources, return
+    //     double currentDensity = static_cast<double>(totalResCount) / 
+    //                             static_cast<double>(width * height);
+    //     if (currentDensity >= resDensity) {
+    //         return; 
+    //     }
 
-        for (int i = 0; i < N; ++i) {
-            Cell & cell = grid.at(i);
+    //     for (int i = 0; i < N; ++i) {
+    //         Cell & cell = grid.at(i);
 
-            // Just making sure...
-            if (cell.resource) {  
-                assert(cell.cooldown == 0 && "A cell that contains a resource cannot have a cooldown.");
-                continue;
-            }
+    //         // Just making sure...
+    //         if (cell.resource) {  
+    //             assert(cell.cooldown == 0 && "A cell that contains a resource cannot have a cooldown.");
+    //             continue;
+    //         }
 
-            // Cell is not ready to regrow
-            if (!cell.resource && cell.cooldown > 0) {
-                cell.cooldown--;
-            }
+    //         // Cell is not ready to regrow
+    //         if (!cell.resource && cell.cooldown > 0) {
+    //             cell.cooldown--;
+    //         }
 
-            // Cell is ready to regrow
-            else if (!cell.resource && cell.cooldown == 0) { 
-                bool sameCell = Random::P(pSameCell);
-                if (sameCell && cell.occupant == nullptr) { // respawn resource in the same cell
-                    cell.resource = true;
-                    ++totalResCount;   
-                }
-                else { // find a different cell
-                    int newCellID = pickRandomResourceCell();
-                    if (newCellID != -1) {
-                        grid.at(newCellID).resource = true; 
-                        ++totalResCount;   
-                    }
-                }
-            }
-        }
+    //         // Cell is ready to regrow
+    //         else if (!cell.resource && cell.cooldown == 0) { 
+    //             bool sameCell = Random::P(pSameCell);
+    //             if (sameCell && cell.occupant == nullptr) { // respawn resource in the same cell
+    //                 cell.resource = true;
+    //                 ++totalResCount;   
+    //             }
+    //             else { // find a different cell
+    //                 int newCellID = pickRandomResourceCell();
+    //                 if (newCellID != -1) {
+    //                     grid.at(newCellID).resource = true; 
+    //                     ++totalResCount;   
+    //                 }
+    //             }
+    //         }
+    //     }
+    // }
+
+    std::array<int, 4> getNeighbors(int center) {
+        assert(center >= 0 && center < width * height);
+        int row = center / width;
+        int col = center % width;
+        
+        std::array<int, 4> neighbors;
+        neighbors.at(0) = ((row - 1 + height) % height) * width + col; // up
+        neighbors.at(1) = ((row + 1) % height) * width + col; // down
+        neighbors.at(2) = row * width + ((col - 1 + width) % width); // left
+        neighbors.at(3) = row * width + ((col + 1) % width); // right
+
+        return neighbors;
     }
 
+    // Resources respawn in patches by seeding one empty cell,
+    // then expanding outward using a BFS‑like growth heuristic.
+    // This occurs when resource levels fall below the target.
+    // Goes with initResourcesLeft() and initAgentsRight()
+    // Cooldown is turned off here
     void updateResourcesPerStep2() {
+        const int N = width * height;
+        const int expectedResCount = std::clamp(static_cast<int>(std::lround(resDensity * N)), 0, N);
 
+        if (totalResCount >= expectedResCount) return;
+
+        int neededResCount = expectedResCount - totalResCount;
+        
+        // Our "seed" (an empty, unoccupied cell)
+        const int seed = pickRandomResourceCell();
+        if (seed == -1) return; 
+        grid.at(seed).resource = true;
+        ++totalResCount;
+        --neededResCount;
+        if (neededResCount <= 0) return;
+
+        // Grow outward!
+        std::vector<int> frontier;
+        frontier.reserve(std::min(N, neededResCount + 1));
+        frontier.push_back(seed);
+        while (neededResCount > 0 && !frontier.empty()) {
+            const int f_idx = Random::getIndex(static_cast<int>(frontier.size()));
+            const int current = frontier.at(f_idx);
+
+            std::array<int, 4> neighbors = getNeighbors(current);
+            std::shuffle(neighbors.begin(), neighbors.end(), Random::getCommonGenerator());
+
+            bool placed = false;
+            for (int neighbor : neighbors) {
+                // Take the first valid neighbor only for randomness 
+                Cell & nc = grid.at(neighbor);
+                if (!nc.resource && !isOccupied(nc)) {
+                    nc.resource = true;
+                    ++totalResCount;
+                    --neededResCount;
+                    frontier.push_back(neighbor);
+                    placed = true;
+                    break;
+                }
+            }
+
+            if (!placed) {
+                // 'f_idx' may not be .back(), doing this retains a copy of the last (and potentially good) candidate
+                frontier[f_idx] = frontier.back();
+                frontier.pop_back();
+            }
+        }
     }
 
     // TODO: Rotation and forward commands are continuous values output from Organism brains?
     // Rotation commands are -1, 0, 1 (left, no turn, right)
     // Forward commands are 0, 1 (stay or move forward one cell)
     // Let agent move if there is no other agent blocking it, otherwise only rotation is possible
-    void stepAgent(Agent & agent, int rotationCmd, int forwardCmd) {
+    void stepAgent(int agent_id, int rotationCmd, int forwardCmd) {
+        Agent & agent = agents.at(agent_id);
+
         // Rotate agent
         agent.facingDir = (agent.facingDir + rotationCmd + 4) % 4;
 
@@ -390,30 +474,31 @@ public:
         int new_row = (agent.row + dRow[agent.facingDir] * forwardCmd + height) % height;
         int new_col = (agent.col + dCol[agent.facingDir] * forwardCmd + width) % width;
 
+        Cell & dest = (*this).at(new_row, new_col);
+
         // Ensure new location is not occupied
-        if ((*this).at(new_row, new_col).occupant == nullptr) {
+        if (!isOccupied(dest)) {
             // Remove agent from its old position
-            (*this).at(agent.row, agent.col).occupant = nullptr;
+            (*this).at(agent.row, agent.col).occupant_id = -1;
 
             // Update the agent's internal position
             agent.col = new_col;
             agent.row = new_row;
             
             // Check for resource to consume
-            Cell & c = (*this).at(agent.row, agent.col);
-            if (c.resource) { 
+            if (dest.resource) { 
                 // Consume resource
                 agent.fitness += 1; // TODO: we can vary this later
-                c.resource = false;
+                dest.resource = false;
 
                 // Random resource cooldown
-                c.cooldown = Random::getInt(minResCooldown, maxResCooldown);
+                // c.cooldown = Random::getInt(minResCooldown, maxResCooldown);
                 --totalResCount;
                 // std::cout << "ATE \n" << std::endl;
             }
 
             // Let agent occupy new cell
-            c.occupant = &agent;
+            dest.occupant_id = agent_id;
         }
     }
 
@@ -477,7 +562,7 @@ public:
                         // Replace with nearest (largest) signals
                         resourceSignal.at(cone) = std::max(resourceSignal.at(cone), intensity);
                     }     
-                    if (cell.occupant) {
+                    if (isOccupied(cell)) {
                         agentSignal.at(cone) = std::max(agentSignal.at(cone), intensity);
                     }
                 }
@@ -488,7 +573,7 @@ public:
                         resourceSignal.at(cone) += intensity;
                         resourceCount.at(cone) += 1;
                     }
-                    if (cell.occupant) {
+                    if (isOccupied(cell)) {
                         agentSignal.at(cone) += intensity;
                         agentCount.at(cone) += 1;
                     }

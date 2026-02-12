@@ -114,7 +114,7 @@ auto KarWorld::evaluate(map<string, shared_ptr<Group>>& groups, int analyze, int
     std::vector<std::shared_ptr<Organism>> population = groups[groupName]->population;
     const int popSize = static_cast<int>(population.size());
 
-    // Sum of agent scores across each lifetime simulation (this defines fitness per generation)
+    // Sum of agent scores across lifetime simulations (fitness per generation of an organism)
     std::vector<int> agentScores(popSize, 0);
 
     // Simulate several 'lifetimes' to correct for chance
@@ -209,12 +209,13 @@ auto KarWorld::evaluate(map<string, shared_ptr<Group>>& groups, int analyze, int
             // --------------------------------------------
 
             for (int i = 0; i < popSize; ++i) {
-                worldMap.stepAgent(worldMap.agents.at(i), rotationCmds.at(i), forwardCmds.at(i));
+                worldMap.stepAgent(i, rotationCmds.at(i), forwardCmds.at(i));
             }
 
             // Random resource regrowth every world step
             // worldMap.growResource();
-            worldMap.updateResourcesPerStep(resSiteFidelity);
+            // worldMap.updateResourcesPerStep(resSiteFidelity);
+            worldMap.updateResourcesPerStep2();
 
             if (visualize/*&& (step % 10) == 0*/) {
                 // std::cout << "\x1B[2J\x1B[H"; // clear screen
